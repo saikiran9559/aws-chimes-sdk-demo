@@ -1,0 +1,84 @@
+name: Previous Version Integration Tests Workflow
+
+on:
+  schedule:
+    # More information on cron https://crontab.guru/
+    - cron: '0 1 * * *'
+
+env:
+  SELENIUM_GRID_PROVIDER: saucelabs
+  CLOUD_WATCH_METRIC: false
+  TEST_TYPE: Github-Action
+  SAUCE_USERNAME: ${{secrets.SAUCE_USERNAME}}
+  SAUCE_ACCESS_KEY: ${{secrets.SAUCE_ACCESS_KEY}}
+  MESSAGING_USER_ARN: ${{secrets.MESSAGING_USER_ARN}}
+
+jobs:
+  prev-version-integ:
+    name: Previous Version Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node.js - 16.x
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16.x
+      - name: Checkout Package
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Get previous version
+        id: prev
+        run: |
+          prev_version=$(.github/script/get-prev-version)
+          echo "Previous version:" $prev_version
+          echo ::set-output name=prev_version::$prev_version
+      - name: Create a Job ID
+        id: create-job-id
+        uses: filipstefansson/uuid-action@ce29ebbb0981ac2448c2e406e848bfaa30ddf04c
+      - name: Set JOB_ID Env Variable
+        run: echo "JOB_ID=${{ steps.create-job-id.outputs.uuid }}" >> $GITHUB_ENV
+      - name: Echo Job ID
+        run: echo "${{ steps.create-job-id.outputs.uuid }}"
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Setup Sauce Connect
+        uses: saucelabs/sauce-connect-action@v2
+        with:
+          username: ${{ secrets.SAUCE_USERNAME }}
+          accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
+          noSSLBumpDomains: all
+          tunnelIdentifier: ${{ steps.create-job-id.outputs.uuid }}
+      - name: Install Kite
+        run: integration/js/script/install-kite
+      - name: Setup
+        run: git checkout tags/v${{ steps.prev.outputs.prev_version }}
+      - name: Pack the Chime SDK and install the tarball into the Demo
+        run: |
+          npm run build
+          npm pack
+          cd demos/browser
+          npm uninstall amazon-chime-sdk-js
+          npm install ../../amazon-chime-sdk-js-${{ steps.prev.outputs.prev_version }}.tgz
+      - name: Clean Install
+        run: npm ci
+      - name: Run Audio Integration Test
+        run: npm run test:integration-audio
+      - name: Run Video Integ Test
+        run: npm run test:integration-video
+      - name: Run Content Share Integration Test Job One
+        run: npm run test:integration-content-share-test-suite-one
+      - name: Run Content Share Integration Test Job Two
+        run: npm run test:integration-content-share-test-suite-two
+      - name: Run Data Message Integration Test
+        run: npm run test:integration-data-message
+      - name: Run Meeting Readiness Checker Integration Test
+        run: npm run test:integration-meeting-readiness-checker
+      - name: Setup userArn
+        run: integration/js/script/test-setup
+      - name: Run Messaging Integration Test
+        run: npm run test:integration-messaging
