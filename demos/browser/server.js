@@ -7,7 +7,8 @@ const fs = require('fs');
 const http = require('http');
 const url = require('url');
 const { v4: uuidv4 } = require('uuid');
-
+const dotenv = require('dotenv')
+dotenv.config();
 // Store created meetings in a map so attendees can join by meeting title.
 const meetingTable = {};
 
@@ -27,8 +28,13 @@ const useChimeSDKMeetings = process.env.USE_CHIME_SDK_MEETINGS || 'true';
 // Create ans AWS SDK Chime object. Region 'us-east-1' is globally available..
 // Use the MediaRegion property below in CreateMeeting to select the region
 // the meeting is hosted in.
-const chime = new AWS.Chime({ region: 'us-east-1' });
+AWS.config.update({ 
+  region: 'us-east-1',
+  accessKeyId: process.env.ACCESS_KEY_ID,
+  secretAccessKey: process.env.SECRET_ACCESS_KEY,
+});
 
+const chime = new AWS.Chime({ region: 'us-east-1' });
 const chimeSDKMediaPipelinesRegional = new AWS.ChimeSDKMediaPipelines({region: 'us-east-1'});
 chimeSDKMediaPipelinesRegional.endpoint = process.env.CHIME_SDK_MEDIA_PIPELINES_ENDPOINT || "https://media-pipelines-chime.us-east-1.amazonaws.com"
 chime.endpoint = endpoint;
